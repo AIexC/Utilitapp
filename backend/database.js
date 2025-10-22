@@ -167,7 +167,7 @@ const initializeDatabase = async () => {
     // Hash generated with bcrypt for password: admin123
     await client.query(`
       INSERT INTO users (username, email, password_hash, role)
-      VALUES ('admin', 'admin@example.com', '$2a$10$N9qo8uLOickgx2ZMRZoMye1IVI9TH2K3t2g8qN7r3vN4f9FN3fGzK', 'admin')
+      VALUES ('admin', 'admin@example.com', '$2a$10$mIWJ0yExCM8fudZZHUcba.yIZnZkpUmjR16xbV059E6QrSalUAzS.', 'admin')
     `);
 
     // Create indexes for better performance
