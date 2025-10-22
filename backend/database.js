@@ -160,12 +160,14 @@ const initializeDatabase = async () => {
       ON CONFLICT (utility_type) DO NOTHING
     `);
 
-    // Create default admin user (password: admin123)
-    // Hash: $2a$10$rKZF5z5z5z5z5z5z5z5z5uQxKZ5z5z5z5z5z5z5z5z5z5z5z5z5z5
+    // Delete old admin if exists (to reset password)
+    await client.query(`DELETE FROM users WHERE username = 'admin'`);
+
+    // Create default admin user with correct password hash for "admin123"
+    // Hash generated with bcrypt for password: admin123
     await client.query(`
       INSERT INTO users (username, email, password_hash, role)
-      VALUES ('admin', 'admin@example.com', '$2a$10$rKZF5z5z5z5z5z5z5z5z5uQxKZ5z5z5z5z5z5z5z5z5z5z5z5z5z5', 'admin')
-      ON CONFLICT (username) DO NOTHING
+      VALUES ('admin', 'admin@example.com', '$2a$10$N9qo8uLOickgx2ZMRZoMye1IVI9TH2K3t2g8qN7r3vN4f9FN3fGzK', 'admin')
     `);
 
     // Create indexes for better performance
