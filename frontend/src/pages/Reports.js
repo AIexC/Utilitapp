@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { dashboardAPI, propertiesAPI, roomsAPI } from '../api/api';
+import { dashboardAPI, propertiesAPI } from '../api/api';
 
 const Reports = () => {
   const [period, setPeriod] = useState('month');
@@ -10,9 +10,6 @@ const Reports = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadData();
-  }, [period, selectedProperty]);
-
   const loadData = async () => {
     try {
       const propsRes = await propertiesAPI.getAll();
@@ -34,6 +31,9 @@ const Reports = () => {
       setLoading(false);
     }
   };
+  
+  loadData();
+}, [period, selectedProperty]);
 
   if (loading) return <div style={styles.container}>Loading...</div>;
 
