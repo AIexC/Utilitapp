@@ -81,14 +81,13 @@ const initializeDatabase = async () => {
       CREATE TABLE IF NOT EXISTS meters (
         id SERIAL PRIMARY KEY,
         property_id INTEGER REFERENCES properties(id) ON DELETE CASCADE,
+        room_id INTEGER REFERENCES rooms(id) ON DELETE SET NULL,
         utility_type VARCHAR(20) NOT NULL,
-        meter_type VARCHAR(20) NOT NULL,
-        split_method VARCHAR(20),
+        meter_number VARCHAR(50) NOT NULL,
+        split_method VARCHAR(20) DEFAULT 'area',
+        unit_price DECIMAL(10, 4),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT check_utility_type CHECK (utility_type IN ('electric', 'gas', 'water', 'heating')),
-        CONSTRAINT check_meter_type CHECK (meter_type IN ('shared', 'individual')),
-        CONSTRAINT check_split_method CHECK (split_method IN ('area', 'equal', 'custom', NULL))
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
@@ -97,13 +96,11 @@ const initializeDatabase = async () => {
       CREATE TABLE IF NOT EXISTS readings (
         id SERIAL PRIMARY KEY,
         meter_id INTEGER REFERENCES meters(id) ON DELETE CASCADE,
-        date DATE NOT NULL,
-        current_value DECIMAL(10, 2),
-        previous_value DECIMAL(10, 2),
-        individual_readings JSONB,
+        reading_date DATE NOT NULL,
+        value DECIMAL(10, 2) NOT NULL,
+        notes TEXT,
         created_by INTEGER REFERENCES users(id),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
@@ -111,63 +108,36 @@ const initializeDatabase = async () => {
     await client.query(`
       CREATE TABLE IF NOT EXISTS bills (
         id SERIAL PRIMARY KEY,
-        property_id INTEGER REFERENCES properties(id) ON DELETE CASCADE,
-        utility_type VARCHAR(20) NOT NULL,
-        date DATE NOT NULL,
+        meter_id INTEGER REFERENCES meters(id) ON DELETE CASCADE,
+        reading_id INTEGER REFERENCES readings(id) ON DELETE SET NULL,
+        bill_date DATE NOT NULL,
         amount DECIMAL(10, 2) NOT NULL,
-        consumption DECIMAL(10, 2),
         image_url TEXT,
-        image_public_id TEXT,
         verified BOOLEAN DEFAULT false,
         created_by INTEGER REFERENCES users(id),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT check_utility_type_bills CHECK (utility_type IN ('electric', 'gas', 'water', 'heating'))
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-    // Utility prices table
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS utility_prices (
-        id SERIAL PRIMARY KEY,
-        utility_type VARCHAR(20) UNIQUE NOT NULL,
-        price DECIMAL(10, 4) NOT NULL,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT check_utility_type_prices CHECK (utility_type IN ('electric', 'gas', 'water', 'heating'))
-      )
-    `);
-
-    // User property access table (for permissions)
+    // User property access table (for multi-user support)
     await client.query(`
       CREATE TABLE IF NOT EXISTS user_property_access (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         property_id INTEGER REFERENCES properties(id) ON DELETE CASCADE,
-        granted_by INTEGER REFERENCES users(id),
-        granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        access_level VARCHAR(20) DEFAULT 'read',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(user_id, property_id)
       )
     `);
 
-    // Insert default utility prices
-    await client.query(`
-      INSERT INTO utility_prices (utility_type, price)
-      VALUES 
-        ('electric', 0.65),
-        ('gas', 0.35),
-        ('water', 8.50),
-        ('heating', 450.00)
-      ON CONFLICT (utility_type) DO NOTHING
-    `);
-
-    // Delete old admin if exists (to reset password)
-    await client.query(`DELETE FROM users WHERE username = 'admin'`);
-
-    // Create default admin user with correct password hash for "admin123"
-    // Hash generated with bcrypt for password: admin123
+    // **FIXED: Insert admin user only if not exists (ON CONFLICT DO NOTHING)**
+    // No more DELETE - just insert if missing!
     await client.query(`
       INSERT INTO users (username, email, password_hash, role)
       VALUES ('admin', 'admin@example.com', '$2a$10$mIWJ0yExCM8fudZZHUcba.yIZnZkpUmjR16xbV059E6QrSalUAzS.', 'admin')
+      ON CONFLICT (username) DO NOTHING
     `);
 
     // Create indexes for better performance
@@ -176,9 +146,9 @@ const initializeDatabase = async () => {
       CREATE INDEX IF NOT EXISTS idx_rooms_property ON rooms(property_id);
       CREATE INDEX IF NOT EXISTS idx_meters_property ON meters(property_id);
       CREATE INDEX IF NOT EXISTS idx_readings_meter ON readings(meter_id);
-      CREATE INDEX IF NOT EXISTS idx_readings_date ON readings(date);
-      CREATE INDEX IF NOT EXISTS idx_bills_property ON bills(property_id);
-      CREATE INDEX IF NOT EXISTS idx_bills_date ON bills(date);
+      CREATE INDEX IF NOT EXISTS idx_readings_date ON readings(reading_date);
+      CREATE INDEX IF NOT EXISTS idx_bills_meter ON bills(meter_id);
+      CREATE INDEX IF NOT EXISTS idx_bills_date ON bills(bill_date);
       CREATE INDEX IF NOT EXISTS idx_user_access ON user_property_access(user_id, property_id);
     `);
 
