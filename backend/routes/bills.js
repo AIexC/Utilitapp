@@ -5,12 +5,14 @@ const cloudinary = require('cloudinary').v2;
 const { pool } = require('../database');
 const { verifyToken } = require('./auth');
 
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
+// Configure Cloudinary (optional - only if you want image uploads)
+if (process.env.CLOUDINARY_CLOUD_NAME) {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+  });
+}
 
 // Configure multer for memory storage
 const upload = multer({ 
@@ -23,26 +25,31 @@ router.use(verifyToken);
 // Get bills
 router.get('/', async (req, res) => {
   try {
-    const { property_id, utility_type, start_date, end_date, verified } = req.query;
+    const { property_id, meter_id, start_date, end_date, verified } = req.query;
     
     let query = `
-      SELECT b.*, p.name as property_name
+      SELECT 
+        b.*, 
+        m.utility_type,
+        m.meter_number,
+        p.name as property_name
       FROM bills b
-      JOIN properties p ON b.property_id = p.id
+      JOIN meters m ON b.meter_id = m.id
+      JOIN properties p ON m.property_id = p.id
       WHERE 1=1
     `;
     const params = [];
     let paramCount = 1;
 
     if (property_id) {
-      query += ` AND b.property_id = $${paramCount}`;
+      query += ` AND m.property_id = $${paramCount}`;
       params.push(property_id);
       paramCount++;
     }
 
-    if (utility_type) {
-      query += ` AND b.utility_type = $${paramCount}`;
-      params.push(utility_type);
+    if (meter_id) {
+      query += ` AND b.meter_id = $${paramCount}`;
+      params.push(meter_id);
       paramCount++;
     }
 
@@ -79,46 +86,40 @@ router.post('/', upload.single('image'), async (req, res) => {
   const client = await pool.connect();
   
   try {
-    const { property_id, utility_type, date, amount, consumption } = req.body;
+    const { meter_id, reading_id, bill_date, amount } = req.body;
     
-    if (!property_id || !utility_type || !date || !amount) {
-      return res.status(400).json({ error: 'property_id, utility_type, date and amount required' });
+    if (!meter_id || !bill_date || !amount) {
+      return res.status(400).json({ error: 'meter_id, bill_date and amount required' });
     }
 
     let imageUrl = null;
-    let imagePublicId = null;
 
-    // Upload image to Cloudinary if provided
-    if (req.file) {
-      const b64 = Buffer.from(req.file.buffer).toString('base64');
-      const dataURI = `data:${req.file.mimetype};base64,${b64}`;
-      
-      const uploadResult = await cloudinary.uploader.upload(dataURI, {
-        folder: 'airbnb-bills',
-        resource_type: 'auto'
-      });
-      
-      imageUrl = uploadResult.secure_url;
-      imagePublicId = uploadResult.public_id;
+    // Upload image to Cloudinary if provided and configured
+    if (req.file && process.env.CLOUDINARY_CLOUD_NAME) {
+      try {
+        const b64 = Buffer.from(req.file.buffer).toString('base64');
+        const dataURI = `data:${req.file.mimetype};base64,${b64}`;
+        
+        const uploadResult = await cloudinary.uploader.upload(dataURI, {
+          folder: 'airbnb-bills',
+          resource_type: 'auto'
+        });
+        
+        imageUrl = uploadResult.secure_url;
+      } catch (uploadError) {
+        console.error('Image upload error:', uploadError);
+        // Continue without image if upload fails
+      }
     }
 
     await client.query('BEGIN');
 
     const result = await client.query(
-      `INSERT INTO bills (property_id, utility_type, date, amount, consumption, image_url, image_public_id, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO bills (meter_id, reading_id, date, amount, image_url, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [property_id, utility_type, date, amount, consumption, imageUrl, imagePublicId, req.user.id]
+      [meter_id, reading_id || null, bill_date, amount, imageUrl, req.user.id]
     );
-
-    // Auto-update utility price if consumption is provided
-    if (consumption && parseFloat(consumption) > 0) {
-      const newPrice = parseFloat(amount) / parseFloat(consumption);
-      await client.query(
-        `UPDATE utility_prices SET price = $1, updated_at = CURRENT_TIMESTAMP WHERE utility_type = $2`,
-        [newPrice, utility_type]
-      );
-    }
 
     await client.query('COMMIT');
     res.status(201).json(result.rows[0]);
@@ -158,22 +159,12 @@ router.patch('/:id/verify', async (req, res) => {
 // Delete bill
 router.delete('/:id', async (req, res) => {
   try {
-    const billResult = await pool.query('SELECT image_public_id FROM bills WHERE id = $1', [req.params.id]);
+    const result = await pool.query('DELETE FROM bills WHERE id = $1 RETURNING id', [req.params.id]);
     
-    if (billResult.rows.length === 0) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Bill not found' });
     }
 
-    // Delete from Cloudinary if exists
-    if (billResult.rows[0].image_public_id) {
-      try {
-        await cloudinary.uploader.destroy(billResult.rows[0].image_public_id);
-      } catch (cloudinaryError) {
-        console.error('Cloudinary delete error:', cloudinaryError);
-      }
-    }
-
-    await pool.query('DELETE FROM bills WHERE id = $1', [req.params.id]);
     res.json({ message: 'Bill deleted successfully' });
   } catch (error) {
     console.error('Delete bill error:', error);

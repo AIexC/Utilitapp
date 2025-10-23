@@ -120,6 +120,16 @@ const initializeDatabase = async () => {
       )
     `);
 
+    // Utility prices table (global default prices)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS utility_prices (
+        id SERIAL PRIMARY KEY,
+        utility_type VARCHAR(20) UNIQUE NOT NULL,
+        price DECIMAL(10, 4) NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // User property access table
     await client.query(`
       CREATE TABLE IF NOT EXISTS user_property_access (
@@ -127,9 +137,22 @@ const initializeDatabase = async () => {
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         property_id INTEGER REFERENCES properties(id) ON DELETE CASCADE,
         access_level VARCHAR(20) DEFAULT 'read',
+        granted_by INTEGER REFERENCES users(id),
+        granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(user_id, property_id)
       )
+    `);
+
+    // Insert default utility prices
+    await client.query(`
+      INSERT INTO utility_prices (utility_type, price)
+      VALUES 
+        ('electricity', 0.65),
+        ('gas', 0.35),
+        ('water', 8.50),
+        ('heating', 450.00)
+      ON CONFLICT (utility_type) DO NOTHING
     `);
 
     // Insert admin user only if not exists (ON CONFLICT DO NOTHING)
