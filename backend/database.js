@@ -91,6 +91,17 @@ const initializeDatabase = async () => {
       )
     `);
 
+    // Meter-Rooms junction table (many-to-many)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS meter_rooms (
+        id SERIAL PRIMARY KEY,
+        meter_id INTEGER NOT NULL REFERENCES meters(id) ON DELETE CASCADE,
+        room_id INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(meter_id, room_id)
+      )
+    `);
+
     // Readings table
     await client.query(`
       CREATE TABLE IF NOT EXISTS readings (
@@ -167,6 +178,8 @@ const initializeDatabase = async () => {
       CREATE INDEX IF NOT EXISTS idx_properties_landlord ON properties(landlord_id);
       CREATE INDEX IF NOT EXISTS idx_rooms_property ON rooms(property_id);
       CREATE INDEX IF NOT EXISTS idx_meters_property ON meters(property_id);
+      CREATE INDEX IF NOT EXISTS idx_meter_rooms_meter ON meter_rooms(meter_id);
+      CREATE INDEX IF NOT EXISTS idx_meter_rooms_room ON meter_rooms(room_id);
       CREATE INDEX IF NOT EXISTS idx_readings_meter ON readings(meter_id);
       CREATE INDEX IF NOT EXISTS idx_readings_date ON readings(date);
       CREATE INDEX IF NOT EXISTS idx_bills_meter ON bills(meter_id);

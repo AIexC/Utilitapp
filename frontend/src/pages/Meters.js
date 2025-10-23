@@ -13,7 +13,8 @@ const Meters = () => {
     utility_type: 'electricity',
     meter_number: '',
     split_method: 'area',
-    unit_price: ''
+    unit_price: '',
+    room_ids: [] // NEW: Array of selected room IDs
   });
   const [loading, setLoading] = useState(true);
 
@@ -49,7 +50,7 @@ const Meters = () => {
     }
   };
 
-  const handleEdit = (meter) => {
+  const handleEdit = async (meter) => {
     setEditingMeter(meter);
     setFormData({
       property_id: meter.property_id || '',
@@ -57,32 +58,45 @@ const Meters = () => {
       utility_type: meter.utility_type,
       meter_number: meter.meter_number,
       split_method: meter.split_method || 'area',
-      unit_price: meter.unit_price || ''
+      unit_price: meter.unit_price || '',
+      room_ids: meter.assigned_rooms ? meter.assigned_rooms.map(r => r.id) : []
     });
-    if (meter.property_id) loadRooms(meter.property_id);
+    if (meter.property_id) await loadRooms(meter.property_id);
     setShowForm(true);
   };
 
   const handleCancelEdit = () => {
     setEditingMeter(null);
     setShowForm(false);
-    setFormData({ property_id: '', room_id: '', utility_type: 'electricity', meter_number: '', split_method: 'area', unit_price: '' });
+    setFormData({ 
+      property_id: '', 
+      room_id: '', 
+      utility_type: 'electricity', 
+      meter_number: '', 
+      split_method: 'area', 
+      unit_price: '',
+      room_ids: []
+    });
+    setRooms([]);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const submitData = {
+        ...formData,
+        unit_price: formData.unit_price || null
+      };
+
       if (editingMeter) {
-        // Update existing meter
         await metersAPI.update(editingMeter.id, {
-          meter_number: formData.meter_number,
-          split_method: formData.split_method,
-          unit_price: formData.unit_price || null,
-          room_id: formData.room_id || null
+          meter_number: submitData.meter_number,
+          split_method: submitData.split_method,
+          unit_price: submitData.unit_price,
+          room_ids: submitData.room_ids
         });
       } else {
-        // Create new meter
-        await metersAPI.create(formData);
+        await metersAPI.create(submitData);
       }
       handleCancelEdit();
       loadData();
@@ -102,7 +116,36 @@ const Meters = () => {
     }
   };
 
+  // NEW: Handle room checkbox toggle
+  const handleRoomToggle = (roomId) => {
+    setFormData(prev => {
+      const currentIds = prev.room_ids || [];
+      if (currentIds.includes(roomId)) {
+        return { ...prev, room_ids: currentIds.filter(id => id !== roomId) };
+      } else {
+        return { ...prev, room_ids: [...currentIds, roomId] };
+      }
+    });
+  };
+
+  // NEW: Calculate total square meters and percentages
+  const getSelectedRoomsInfo = () => {
+    const selectedRooms = rooms.filter(r => formData.room_ids.includes(r.id));
+    const totalSqm = selectedRooms.reduce((sum, r) => sum + parseFloat(r.square_meters), 0);
+    
+    return {
+      count: selectedRooms.length,
+      totalSqm: totalSqm.toFixed(2),
+      rooms: selectedRooms.map(r => ({
+        ...r,
+        percentage: totalSqm > 0 ? ((parseFloat(r.square_meters) / totalSqm) * 100).toFixed(1) : 0
+      }))
+    };
+  };
+
   if (loading) return <div style={styles.container}>Loading...</div>;
+
+  const selectedInfo = getSelectedRoomsInfo();
 
   return (
     <div style={styles.container}>
@@ -126,8 +169,9 @@ const Meters = () => {
               <select
                 value={formData.property_id}
                 onChange={(e) => {
-                  setFormData({ ...formData, property_id: e.target.value });
+                  setFormData({ ...formData, property_id: e.target.value, room_ids: [] });
                   if (e.target.value) loadRooms(e.target.value);
+                  else setRooms([]);
                 }}
                 style={styles.input}
                 required
@@ -172,7 +216,65 @@ const Meters = () => {
             <option value="individual">🚪 Individual (per room)</option>
           </select>
 
-          {formData.split_method === 'individual' && (
+          <input
+            type="number"
+            step="0.0001"
+            placeholder="Unit Price (RON) - Optional"
+            value={formData.unit_price}
+            onChange={(e) => setFormData({ ...formData, unit_price: e.target.value })}
+            style={styles.input}
+          />
+
+          {/* NEW: Multi-room selection */}
+          {rooms.length > 0 && formData.split_method !== 'individual' && (
+            <div style={styles.roomSelection}>
+              <div style={styles.roomHeader}>
+                <h4 style={styles.roomTitle}>🏠 Select Rooms Served by This Meter</h4>
+                <p style={styles.roomSummary}>
+                  ({selectedInfo.count} selected, {selectedInfo.totalSqm}m² total)
+                </p>
+              </div>
+              
+              <div style={styles.roomList}>
+                {rooms.map(room => {
+                  const isSelected = formData.room_ids.includes(room.id);
+                  const roomInfo = selectedInfo.rooms.find(r => r.id === room.id);
+                  
+                  return (
+                    <label 
+                      key={room.id} 
+                      style={{
+                        ...styles.roomItem,
+                        backgroundColor: isSelected ? '#EEF2FF' : 'white',
+                        borderColor: isSelected ? '#4F46E5' : '#E5E7EB'
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleRoomToggle(room.id)}
+                        style={styles.checkbox}
+                      />
+                      <span style={styles.roomName}>{room.name}</span>
+                      <span style={styles.roomSize}>{room.square_meters}m²</span>
+                      {isSelected && formData.split_method === 'area' && roomInfo && (
+                        <span style={styles.roomPercentage}>({roomInfo.percentage}%)</span>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+
+              {selectedInfo.count === 0 && (
+                <p style={styles.warningText}>
+                  ⚠️ Please select at least one room for this meter
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* OLD: Single room selection for 'individual' mode */}
+          {formData.split_method === 'individual' && rooms.length > 0 && (
             <select
               value={formData.room_id}
               onChange={(e) => setFormData({ ...formData, room_id: e.target.value })}
@@ -184,15 +286,6 @@ const Meters = () => {
               ))}
             </select>
           )}
-
-          <input
-            type="number"
-            step="0.0001"
-            placeholder="Unit Price (RON) - Optional"
-            value={formData.unit_price}
-            onChange={(e) => setFormData({ ...formData, unit_price: e.target.value })}
-            style={styles.input}
-          />
 
           <div style={{ display: 'flex', gap: '1rem' }}>
             <button type="submit" style={styles.submitBtn}>
@@ -217,9 +310,23 @@ const Meters = () => {
             </h3>
             <p style={styles.cardText}>🔢 {meter.meter_number}</p>
             <p style={styles.cardText}>🏠 {meter.property_name}</p>
-            {meter.room_name && (
+            
+            {/* NEW: Display assigned rooms */}
+            {meter.assigned_rooms && meter.assigned_rooms.length > 0 ? (
+              <div style={styles.assignedRooms}>
+                <p style={styles.cardText}>🚪 Rooms ({meter.assigned_rooms.length}):</p>
+                <ul style={styles.roomsList}>
+                  {meter.assigned_rooms.map(room => (
+                    <li key={room.id} style={styles.roomsListItem}>
+                      • {room.name} ({room.square_meters}m²)
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : meter.room_name && (
               <p style={styles.cardText}>🚪 Room: {meter.room_name}</p>
             )}
+            
             <p style={styles.cardText}>
               📊 Split: {meter.split_method === 'area' ? '📏 By Area' : 
                         meter.split_method === 'equal' ? '⚖️ Equal' : 
@@ -254,12 +361,105 @@ const styles = {
   addBtn: { backgroundColor: '#4F46E5', color: 'white', padding: '0.75rem 1.5rem', border: 'none', borderRadius: '0.375rem', cursor: 'pointer', fontSize: '1rem', fontWeight: '500' },
   form: { backgroundColor: 'white', padding: '1.5rem', borderRadius: '0.5rem', marginBottom: '2rem', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)', display: 'flex', flexDirection: 'column', gap: '1rem' },
   input: { padding: '0.75rem', border: '1px solid #D1D5DB', borderRadius: '0.375rem', fontSize: '1rem' },
+  
+  // NEW: Room selection styles
+  roomSelection: { 
+    border: '2px solid #E5E7EB', 
+    borderRadius: '0.5rem', 
+    padding: '1rem',
+    backgroundColor: '#F9FAFB'
+  },
+  roomHeader: { 
+    marginBottom: '0.75rem',
+    borderBottom: '1px solid #E5E7EB',
+    paddingBottom: '0.5rem'
+  },
+  roomTitle: { 
+    margin: 0, 
+    fontSize: '1rem', 
+    fontWeight: '600', 
+    color: '#111827' 
+  },
+  roomSummary: { 
+    margin: '0.25rem 0 0 0', 
+    fontSize: '0.875rem', 
+    color: '#6B7280',
+    fontWeight: '500'
+  },
+  roomList: { 
+    display: 'flex', 
+    flexDirection: 'column', 
+    gap: '0.5rem',
+    maxHeight: '300px',
+    overflowY: 'auto'
+  },
+  roomItem: { 
+    display: 'flex', 
+    alignItems: 'center', 
+    padding: '0.75rem', 
+    border: '2px solid', 
+    borderRadius: '0.375rem',
+    cursor: 'pointer',
+    transition: 'all 0.2s'
+  },
+  checkbox: { 
+    width: '18px', 
+    height: '18px', 
+    marginRight: '0.75rem',
+    cursor: 'pointer'
+  },
+  roomName: { 
+    flex: 1, 
+    fontSize: '0.95rem', 
+    fontWeight: '500',
+    color: '#111827'
+  },
+  roomSize: { 
+    fontSize: '0.875rem', 
+    color: '#6B7280',
+    marginRight: '0.5rem'
+  },
+  roomPercentage: { 
+    fontSize: '0.875rem', 
+    fontWeight: '600',
+    color: '#4F46E5',
+    backgroundColor: '#EEF2FF',
+    padding: '0.25rem 0.5rem',
+    borderRadius: '0.25rem'
+  },
+  warningText: {
+    color: '#DC2626',
+    fontSize: '0.875rem',
+    marginTop: '0.5rem',
+    marginBottom: 0
+  },
+
   submitBtn: { backgroundColor: '#10B981', color: 'white', padding: '0.75rem', border: 'none', borderRadius: '0.375rem', cursor: 'pointer', fontSize: '1rem', fontWeight: '500', flex: 1 },
   cancelBtn: { backgroundColor: '#6B7280', color: 'white', padding: '0.75rem', border: 'none', borderRadius: '0.375rem', cursor: 'pointer', fontSize: '1rem', fontWeight: '500', flex: 1 },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' },
   card: { backgroundColor: 'white', padding: '1.5rem', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)', border: '1px solid #E5E7EB' },
   cardTitle: { fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '0.75rem', color: '#111827', textTransform: 'capitalize' },
   cardText: { color: '#6B7280', marginBottom: '0.5rem', fontSize: '0.9rem' },
+  
+  // NEW: Assigned rooms display
+  assignedRooms: {
+    backgroundColor: '#F9FAFB',
+    padding: '0.75rem',
+    borderRadius: '0.375rem',
+    marginTop: '0.5rem',
+    marginBottom: '0.5rem'
+  },
+  roomsList: {
+    margin: '0.5rem 0 0 0',
+    paddingLeft: '1rem',
+    listStyle: 'none'
+  },
+  roomsListItem: {
+    fontSize: '0.85rem',
+    color: '#4B5563',
+    marginBottom: '0.25rem'
+  },
+
   editBtn: { backgroundColor: '#3B82F6', color: 'white', padding: '0.5rem 1rem', border: 'none', borderRadius: '0.375rem', cursor: 'pointer', fontSize: '0.9rem', flex: 1 },
   deleteBtn: { backgroundColor: '#EF4444', color: 'white', padding: '0.5rem 1rem', border: 'none', borderRadius: '0.375rem', cursor: 'pointer', fontSize: '0.9rem', flex: 1 },
   empty: { textAlign: 'center', color: '#9CA3AF', padding: '3rem', fontSize: '1.1rem' }
