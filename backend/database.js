@@ -96,7 +96,7 @@ const initializeDatabase = async () => {
       CREATE TABLE IF NOT EXISTS readings (
         id SERIAL PRIMARY KEY,
         meter_id INTEGER REFERENCES meters(id) ON DELETE CASCADE,
-        reading_date DATE NOT NULL,
+        date DATE NOT NULL,
         value DECIMAL(10, 2) NOT NULL,
         notes TEXT,
         created_by INTEGER REFERENCES users(id),
@@ -110,7 +110,7 @@ const initializeDatabase = async () => {
         id SERIAL PRIMARY KEY,
         meter_id INTEGER REFERENCES meters(id) ON DELETE CASCADE,
         reading_id INTEGER REFERENCES readings(id) ON DELETE SET NULL,
-        bill_date DATE NOT NULL,
+        date DATE NOT NULL,
         amount DECIMAL(10, 2) NOT NULL,
         image_url TEXT,
         verified BOOLEAN DEFAULT false,
@@ -120,7 +120,7 @@ const initializeDatabase = async () => {
       )
     `);
 
-    // User property access table (for multi-user support)
+    // User property access table
     await client.query(`
       CREATE TABLE IF NOT EXISTS user_property_access (
         id SERIAL PRIMARY KEY,
@@ -132,8 +132,7 @@ const initializeDatabase = async () => {
       )
     `);
 
-    // **FIXED: Insert admin user only if not exists (ON CONFLICT DO NOTHING)**
-    // No more DELETE - just insert if missing!
+    // Insert admin user only if not exists (ON CONFLICT DO NOTHING)
     await client.query(`
       INSERT INTO users (username, email, password_hash, role)
       VALUES ('admin', 'admin@example.com', '$2a$10$mIWJ0yExCM8fudZZHUcba.yIZnZkpUmjR16xbV059E6QrSalUAzS.', 'admin')
@@ -146,9 +145,9 @@ const initializeDatabase = async () => {
       CREATE INDEX IF NOT EXISTS idx_rooms_property ON rooms(property_id);
       CREATE INDEX IF NOT EXISTS idx_meters_property ON meters(property_id);
       CREATE INDEX IF NOT EXISTS idx_readings_meter ON readings(meter_id);
-      CREATE INDEX IF NOT EXISTS idx_readings_date ON readings(reading_date);
+      CREATE INDEX IF NOT EXISTS idx_readings_date ON readings(date);
       CREATE INDEX IF NOT EXISTS idx_bills_meter ON bills(meter_id);
-      CREATE INDEX IF NOT EXISTS idx_bills_date ON bills(bill_date);
+      CREATE INDEX IF NOT EXISTS idx_bills_date ON bills(date);
       CREATE INDEX IF NOT EXISTS idx_user_access ON user_property_access(user_id, property_id);
     `);
 
