@@ -6,6 +6,7 @@ const Rooms = () => {
   const [selectedProperty, setSelectedProperty] = useState('');
   const [rooms, setRooms] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingRoom, setEditingRoom] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     square_meters: ''
@@ -41,17 +42,35 @@ const Rooms = () => {
     }
   };
 
+  const handleEdit = (room) => {
+    setEditingRoom(room);
+    setFormData({
+      name: room.name,
+      square_meters: room.square_meters
+    });
+    setShowForm(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingRoom(null);
+    setShowForm(false);
+    setFormData({ name: '', square_meters: '' });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await roomsAPI.create({ ...formData, property_id: selectedProperty });
-      setShowForm(false);
-      setFormData({ name: '', square_meters: '' });
+      if (editingRoom) {
+        await roomsAPI.update(editingRoom.id, formData);
+      } else {
+        await roomsAPI.create({ ...formData, property_id: selectedProperty });
+      }
+      handleCancelEdit();
       // Reload rooms
       const response = await roomsAPI.getByProperty(selectedProperty);
       setRooms(response.data);
     } catch (error) {
-      alert('Error creating room: ' + (error.response?.data?.error || error.message));
+      alert(`Error ${editingRoom ? 'updating' : 'creating'} room: ` + (error.response?.data?.error || error.message));
     }
   };
 
@@ -72,9 +91,9 @@ const Rooms = () => {
     <div style={styles.container}>
       <div style={styles.header}>
         <h1 style={styles.title}>🚪 Rooms</h1>
-        {selectedProperty && (
-          <button onClick={() => setShowForm(!showForm)} style={styles.addBtn}>
-            {showForm ? 'Cancel' : '+ Add Room'}
+        {selectedProperty && !showForm && (
+          <button onClick={() => setShowForm(true)} style={styles.addBtn}>
+            + Add Room
           </button>
         )}
       </div>
@@ -98,6 +117,10 @@ const Rooms = () => {
         <>
           {showForm && (
             <form onSubmit={handleSubmit} style={styles.form}>
+              <h3 style={{ margin: 0, marginBottom: '1rem', color: '#111827' }}>
+                {editingRoom ? '✏️ Edit Room' : '➕ Add New Room'}
+              </h3>
+              
               <input
                 type="text"
                 placeholder="Room Name *"
@@ -115,7 +138,15 @@ const Rooms = () => {
                 style={styles.input}
                 required
               />
-              <button type="submit" style={styles.submitBtn}>Create Room</button>
+              
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <button type="submit" style={styles.submitBtn}>
+                  {editingRoom ? '💾 Update Room' : '✅ Create Room'}
+                </button>
+                <button type="button" onClick={handleCancelEdit} style={styles.cancelBtn}>
+                  Cancel
+                </button>
+              </div>
             </form>
           )}
 
@@ -124,9 +155,14 @@ const Rooms = () => {
               <div key={room.id} style={styles.card}>
                 <h3 style={styles.cardTitle}>{room.name}</h3>
                 <p style={styles.cardText}>📏 {room.square_meters} m²</p>
-                <button onClick={() => handleDelete(room.id)} style={styles.deleteBtn}>
-                  Delete
-                </button>
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+                  <button onClick={() => handleEdit(room)} style={styles.editBtn}>
+                    ✏️ Edit
+                  </button>
+                  <button onClick={() => handleDelete(room.id)} style={styles.deleteBtn}>
+                    🗑️ Delete
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -149,12 +185,14 @@ const styles = {
   select: { width: '100%', maxWidth: '400px', padding: '0.75rem', border: '1px solid #D1D5DB', borderRadius: '0.375rem', fontSize: '1rem', backgroundColor: 'white' },
   form: { backgroundColor: 'white', padding: '1.5rem', borderRadius: '0.5rem', marginBottom: '2rem', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)', display: 'flex', flexDirection: 'column', gap: '1rem' },
   input: { padding: '0.75rem', border: '1px solid #D1D5DB', borderRadius: '0.375rem', fontSize: '1rem' },
-  submitBtn: { backgroundColor: '#10B981', color: 'white', padding: '0.75rem', border: 'none', borderRadius: '0.375rem', cursor: 'pointer', fontSize: '1rem', fontWeight: '500' },
+  submitBtn: { backgroundColor: '#10B981', color: 'white', padding: '0.75rem', border: 'none', borderRadius: '0.375rem', cursor: 'pointer', fontSize: '1rem', fontWeight: '500', flex: 1 },
+  cancelBtn: { backgroundColor: '#6B7280', color: 'white', padding: '0.75rem', border: 'none', borderRadius: '0.375rem', cursor: 'pointer', fontSize: '1rem', fontWeight: '500', flex: 1 },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1.5rem' },
   card: { backgroundColor: 'white', padding: '1.5rem', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)', border: '1px solid #E5E7EB' },
   cardTitle: { fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '0.75rem', color: '#111827' },
   cardText: { color: '#6B7280', marginBottom: '0.5rem', fontSize: '0.9rem' },
-  deleteBtn: { backgroundColor: '#EF4444', color: 'white', padding: '0.5rem 1rem', border: 'none', borderRadius: '0.375rem', cursor: 'pointer', fontSize: '0.9rem', marginTop: '1rem', width: '100%' },
+  editBtn: { backgroundColor: '#3B82F6', color: 'white', padding: '0.5rem 1rem', border: 'none', borderRadius: '0.375rem', cursor: 'pointer', fontSize: '0.9rem', flex: 1 },
+  deleteBtn: { backgroundColor: '#EF4444', color: 'white', padding: '0.5rem 1rem', border: 'none', borderRadius: '0.375rem', cursor: 'pointer', fontSize: '0.9rem', flex: 1 },
   empty: { textAlign: 'center', color: '#9CA3AF', padding: '3rem', fontSize: '1.1rem' }
 };
 

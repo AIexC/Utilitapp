@@ -75,6 +75,7 @@ export const metersAPI = {
 export const readingsAPI = {
   getAll: (params) => api.get('/readings', { params }),
   create: (data) => api.post('/readings', data),
+  update: (id, data) => api.put(`/readings/${id}`, data),
   delete: (id) => api.delete(`/readings/${id}`)
 };
 
@@ -84,6 +85,7 @@ export const billsAPI = {
   create: (formData) => api.post('/bills', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
+  update: (id, data) => api.put(`/bills/${id}`, data),
   verify: (id, verified) => api.patch(`/bills/${id}/verify`, { verified }),
   delete: (id) => api.delete(`/bills/${id}`)
 };

@@ -6,6 +6,7 @@ const Readings = () => {
   const [properties, setProperties] = useState([]);
   const [meters, setMeters] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingReading, setEditingReading] = useState(null);
   const [formData, setFormData] = useState({
     meter_id: '',
     reading_date: new Date().toISOString().split('T')[0],
@@ -42,15 +43,43 @@ const Readings = () => {
     }
   };
 
+  const handleEdit = async (reading) => {
+    setEditingReading(reading);
+    setFormData({
+      meter_id: reading.meter_id,
+      reading_date: reading.date.split('T')[0],
+      value: reading.value,
+      notes: reading.notes || ''
+    });
+    // Load meters for the property
+    if (reading.property_id) {
+      await loadMeters(reading.property_id);
+    }
+    setShowForm(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingReading(null);
+    setShowForm(false);
+    setFormData({ meter_id: '', reading_date: new Date().toISOString().split('T')[0], value: '', notes: '' });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await readingsAPI.create(formData);
-      setShowForm(false);
-      setFormData({ meter_id: '', reading_date: new Date().toISOString().split('T')[0], value: '', notes: '' });
+      if (editingReading) {
+        await readingsAPI.update(editingReading.id, {
+          reading_date: formData.reading_date,
+          value: formData.value,
+          notes: formData.notes
+        });
+      } else {
+        await readingsAPI.create(formData);
+      }
+      handleCancelEdit();
       loadData();
     } catch (error) {
-      alert('Error creating reading: ' + (error.response?.data?.error || error.message));
+      alert(`Error ${editingReading ? 'updating' : 'creating'} reading: ` + (error.response?.data?.error || error.message));
     }
   };
 
@@ -87,40 +116,50 @@ const Readings = () => {
     <div style={styles.container}>
       <div style={styles.header}>
         <h1 style={styles.title}>📊 Meter Readings</h1>
-        <button onClick={() => setShowForm(!showForm)} style={styles.addBtn}>
-          {showForm ? 'Cancel' : '+ Add Reading'}
-        </button>
+        {!showForm && (
+          <button onClick={() => setShowForm(true)} style={styles.addBtn}>
+            + Add Reading
+          </button>
+        )}
       </div>
 
       {showForm && (
         <form onSubmit={handleSubmit} style={styles.form}>
-          <select
-            onChange={(e) => {
-              setFormData({ ...formData, property_id: e.target.value });
-              if (e.target.value) loadMeters(e.target.value);
-            }}
-            style={styles.input}
-            required
-          >
-            <option value="">Select Property *</option>
-            {properties.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
+          <h3 style={{ margin: 0, marginBottom: '1rem', color: '#111827' }}>
+            {editingReading ? '✏️ Edit Reading' : '➕ Add New Reading'}
+          </h3>
 
-          <select
-            value={formData.meter_id}
-            onChange={(e) => setFormData({ ...formData, meter_id: e.target.value })}
-            style={styles.input}
-            required
-          >
-            <option value="">Select Meter *</option>
-            {meters.map(m => (
-              <option key={m.id} value={m.id}>
-                {m.utility_type} - {m.meter_number}
-              </option>
-            ))}
-          </select>
+          {!editingReading && (
+            <>
+              <select
+                onChange={(e) => {
+                  setFormData({ ...formData, property_id: e.target.value });
+                  if (e.target.value) loadMeters(e.target.value);
+                }}
+                style={styles.input}
+                required
+              >
+                <option value="">Select Property *</option>
+                {properties.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+
+              <select
+                value={formData.meter_id}
+                onChange={(e) => setFormData({ ...formData, meter_id: e.target.value })}
+                style={styles.input}
+                required
+              >
+                <option value="">Select Meter *</option>
+                {meters.map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.utility_type} - {m.meter_number}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
 
           <input
             type="date"
@@ -147,7 +186,14 @@ const Readings = () => {
             style={{ ...styles.input, minHeight: '80px' }}
           />
 
-          <button type="submit" style={styles.submitBtn}>Save Reading</button>
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <button type="submit" style={styles.submitBtn}>
+              {editingReading ? '💾 Update Reading' : '✅ Save Reading'}
+            </button>
+            <button type="button" onClick={handleCancelEdit} style={styles.cancelBtn}>
+              Cancel
+            </button>
+          </div>
         </form>
       )}
 
@@ -184,12 +230,20 @@ const Readings = () => {
                 <td style={styles.td}>{calculateConsumption(reading)}</td>
                 <td style={styles.td}>{calculateCost(reading)}</td>
                 <td style={styles.td}>
-                  <button 
-                    onClick={() => handleDelete(reading.id)} 
-                    style={styles.deleteBtn}
-                  >
-                    Delete
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button 
+                      onClick={() => handleEdit(reading)} 
+                      style={styles.editBtn}
+                    >
+                      ✏️
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(reading.id)} 
+                      style={styles.deleteBtn}
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -211,13 +265,15 @@ const styles = {
   addBtn: { backgroundColor: '#4F46E5', color: 'white', padding: '0.75rem 1.5rem', border: 'none', borderRadius: '0.375rem', cursor: 'pointer', fontSize: '1rem', fontWeight: '500' },
   form: { backgroundColor: 'white', padding: '1.5rem', borderRadius: '0.5rem', marginBottom: '2rem', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)', display: 'flex', flexDirection: 'column', gap: '1rem' },
   input: { padding: '0.75rem', border: '1px solid #D1D5DB', borderRadius: '0.375rem', fontSize: '1rem' },
-  submitBtn: { backgroundColor: '#10B981', color: 'white', padding: '0.75rem', border: 'none', borderRadius: '0.375rem', cursor: 'pointer', fontSize: '1rem', fontWeight: '500' },
+  submitBtn: { backgroundColor: '#10B981', color: 'white', padding: '0.75rem', border: 'none', borderRadius: '0.375rem', cursor: 'pointer', fontSize: '1rem', fontWeight: '500', flex: 1 },
+  cancelBtn: { backgroundColor: '#6B7280', color: 'white', padding: '0.75rem', border: 'none', borderRadius: '0.375rem', cursor: 'pointer', fontSize: '1rem', fontWeight: '500', flex: 1 },
   table: { backgroundColor: 'white', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)', overflow: 'auto' },
   tableElement: { width: '100%', borderCollapse: 'collapse' },
   tableHeader: { backgroundColor: '#F3F4F6', borderBottom: '2px solid #E5E7EB' },
   th: { padding: '1rem', textAlign: 'left', fontWeight: '600', color: '#374151', fontSize: '0.9rem' },
   tr: { borderBottom: '1px solid #E5E7EB' },
   td: { padding: '1rem', color: '#6B7280', fontSize: '0.9rem' },
+  editBtn: { backgroundColor: '#3B82F6', color: 'white', padding: '0.4rem 0.8rem', border: 'none', borderRadius: '0.375rem', cursor: 'pointer', fontSize: '0.85rem' },
   deleteBtn: { backgroundColor: '#EF4444', color: 'white', padding: '0.4rem 0.8rem', border: 'none', borderRadius: '0.375rem', cursor: 'pointer', fontSize: '0.85rem' },
   empty: { textAlign: 'center', color: '#9CA3AF', padding: '3rem', fontSize: '1.1rem' }
 };

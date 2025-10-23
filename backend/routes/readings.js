@@ -83,6 +83,34 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Update reading
+router.put('/:id', async (req, res) => {
+  try {
+    const { reading_date, value, notes } = req.body;
+    
+    if (!reading_date || !value) {
+      return res.status(400).json({ error: 'reading_date and value required' });
+    }
+
+    const result = await pool.query(
+      `UPDATE readings 
+       SET date = $1, value = $2, notes = $3, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $4
+       RETURNING *`,
+      [reading_date, value, notes, req.params.id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Reading not found' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Update reading error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Delete reading
 router.delete('/:id', async (req, res) => {
   try {
