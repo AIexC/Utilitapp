@@ -45,7 +45,8 @@ router.get('/monthly-by-landlord', async (req, res) => {
         COUNT(b.id) as bill_count
       FROM landlords l
       JOIN properties p ON l.id = p.landlord_id
-      JOIN bills b ON p.id = b.property_id
+      JOIN meters m ON p.id = m.property_id
+      JOIN bills b ON m.id = b.meter_id
       WHERE DATE_TRUNC('month', b.date) = DATE_TRUNC('month', $1::date)
       GROUP BY l.id, l.name, p.id, p.name
       ORDER BY l.name, p.name
@@ -94,9 +95,10 @@ router.get('/recent-activity', async (req, res) => {
     `, [limit]);
 
     const bills = await pool.query(`
-      SELECT b.*, p.name as property_name
+      SELECT b.*, m.utility_type, p.name as property_name
       FROM bills b
-      JOIN properties p ON b.property_id = p.id
+      JOIN meters m ON b.meter_id = m.id
+      JOIN properties p ON m.property_id = p.id
       ORDER BY b.created_at DESC
       LIMIT $1
     `, [limit]);
