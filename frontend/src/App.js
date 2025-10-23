@@ -12,6 +12,7 @@ import './styles/App.css';
 import Meters from './pages/Meters';
 import Readings from './pages/Readings';
 import Bills from './pages/Bills';
+import Reports from './pages/Reports';
 //import Users from './pages/Users';
 
 function App() {
