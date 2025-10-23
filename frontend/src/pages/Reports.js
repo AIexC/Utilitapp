@@ -12,32 +12,32 @@ const Reports = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const loadData = async () => {
+      try {
+        const propsRes = await propertiesAPI.getAll();
+        setProperties(propsRes.data);
+
+        const params = { month: month.toString(), year: year.toString() };
+        if (selectedProperty) params.property_id = selectedProperty;
+
+        const [summaryRes, monthlyRes, activityRes] = await Promise.all([
+          dashboardAPI.getSummary(params),
+          dashboardAPI.getMonthlyByLandlord(params),
+          dashboardAPI.getRecentActivity({ limit: 10 })
+        ]);
+
+        setSummary(summaryRes.data);
+        setMonthlyData(monthlyRes.data);
+        setRecentActivity(activityRes.data);
+      } catch (error) {
+        console.error('Error loading reports:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     loadData();
   }, [month, year, selectedProperty]);
-
-  const loadData = async () => {
-    try {
-      const propsRes = await propertiesAPI.getAll();
-      setProperties(propsRes.data);
-
-      const params = { month: month.toString(), year: year.toString() };
-      if (selectedProperty) params.property_id = selectedProperty;
-
-      const [summaryRes, monthlyRes, activityRes] = await Promise.all([
-        dashboardAPI.getSummary(params),
-        dashboardAPI.getMonthlyByLandlord(params),
-        dashboardAPI.getRecentActivity({ limit: 10 })
-      ]);
-
-      setSummary(summaryRes.data);
-      setMonthlyData(monthlyRes.data);
-      setRecentActivity(activityRes.data);
-    } catch (error) {
-      console.error('Error loading reports:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) return <div style={styles.container}>Loading...</div>;
 
