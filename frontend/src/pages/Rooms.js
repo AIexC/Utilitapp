@@ -16,6 +16,15 @@ const Rooms = () => {
   }, []);
 
   useEffect(() => {
+    const loadRooms = async () => {
+      try {
+        const response = await roomsAPI.getByProperty(selectedProperty);
+        setRooms(response.data);
+      } catch (error) {
+        console.error('Error loading rooms:', error);
+      }
+    };
+
     if (selectedProperty) {
       loadRooms();
     } else {
@@ -32,22 +41,15 @@ const Rooms = () => {
     }
   };
 
-  const loadRooms = async () => {
-    try {
-      const response = await roomsAPI.getByProperty(selectedProperty);
-      setRooms(response.data);
-    } catch (error) {
-      console.error('Error loading rooms:', error);
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       await roomsAPI.create({ ...formData, property_id: selectedProperty });
       setShowForm(false);
       setFormData({ name: '', square_meters: '' });
-      loadRooms();
+      // Reload rooms
+      const response = await roomsAPI.getByProperty(selectedProperty);
+      setRooms(response.data);
     } catch (error) {
       alert('Error creating room: ' + (error.response?.data?.error || error.message));
     }
@@ -57,7 +59,9 @@ const Rooms = () => {
     if (window.confirm('Delete this room?')) {
       try {
         await roomsAPI.delete(id);
-        loadRooms();
+        // Reload rooms
+        const response = await roomsAPI.getByProperty(selectedProperty);
+        setRooms(response.data);
       } catch (error) {
         alert('Error: ' + (error.response?.data?.error || error.message));
       }
