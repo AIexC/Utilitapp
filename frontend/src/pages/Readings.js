@@ -169,7 +169,7 @@ const Readings = () => {
             {readings.map((reading) => (
               <tr key={reading.id} style={styles.tr}>
                 <td style={styles.td}>
-                  {new Date(reading.reading_date).toLocaleDateString()}
+                  {new Date(reading.date).toLocaleDateString()}
                 </td>
                 <td style={styles.td}>{reading.property_name}</td>
                 <td style={styles.td}>

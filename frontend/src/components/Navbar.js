@@ -24,8 +24,11 @@ const Navbar = () => {
           <Link to="/dashboard" style={styles.link}>Dashboard</Link>
           <Link to="/landlords" style={styles.link}>Landlords</Link>
           <Link to="/properties" style={styles.link}>Properties</Link>
+          <Link to="/rooms" style={styles.link}>Rooms</Link>
+          <Link to="/meters" style={styles.link}>Meters</Link>
           <Link to="/readings" style={styles.link}>Readings</Link>
           <Link to="/bills" style={styles.link}>Bills</Link>
+          <Link to="/reports" style={styles.link}>Reports</Link>
           {isAdmin && <Link to="/users" style={styles.link}>Users</Link>}
           
           <div style={styles.userInfo}>
@@ -47,7 +50,7 @@ const styles = {
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
   },
   container: {
-    maxWidth: '1200px',
+    maxWidth: '1400px',
     margin: '0 auto',
     padding: '0 1rem',
     display: 'flex',
