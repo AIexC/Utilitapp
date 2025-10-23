@@ -14,8 +14,17 @@ const Rooms = () => {
   });
 
   useEffect(() => {
-    if (propertyId) loadRooms();
-  }, [propertyId]);
+  const loadRooms = async () => {
+    try {
+      const response = await roomsAPI.getByProperty(propertyId);
+      setRooms(response.data);
+    } catch (error) {
+      console.error('Error loading rooms:', error);
+    }
+  };
+  
+  if (propertyId) loadRooms();
+}, [propertyId]);
 
   const loadRooms = async () => {
     try {
