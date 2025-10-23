@@ -9,12 +9,10 @@ import Landlords from './pages/Landlords';
 import Properties from './pages/Properties';
 import Rooms from './pages/Rooms';
 import './styles/App.css';
-
-// Import other pages when you create them
-// import Meters from './pages/Meters';
-// import Readings from './pages/Readings';
-// import Bills from './pages/Bills';
-// import Users from './pages/Users';
+import Meters from './pages/Meters';
+import Readings from './pages/Readings';
+import Bills from './pages/Bills';
+//import Users from './pages/Users';
 
 function App() {
   return (
@@ -47,13 +45,30 @@ function App() {
               <Rooms />
             </PrivateRoute>
           } />
+          <Route path="/meters" element={
+            <PrivateRoute>
+                <Meters />
+            </PrivateRoute>
+            } />
+
+            <Route path="/readings" element={
+            <PrivateRoute>
+                <Readings />
+            </PrivateRoute>
+            } />
+
+            <Route path="/bills" element={
+            <PrivateRoute>
+                <Bills />
+            </PrivateRoute>
+            } />
+
+            <Route path="/reports" element={
+            <PrivateRoute>
+                <Reports />
+            </PrivateRoute>
+            } />
           
-          {/* Add more routes here:
-          <Route path="/meters" element={<PrivateRoute><Meters /></PrivateRoute>} />
-          <Route path="/readings" element={<PrivateRoute><Readings /></PrivateRoute>} />
-          <Route path="/bills" element={<PrivateRoute><Bills /></PrivateRoute>} />
-          <Route path="/users" element={<PrivateRoute adminOnly><Users /></PrivateRoute>} />
-          */}
           
           <Route path="/" element={<Navigate to="/dashboard" />} />
           <Route path="*" element={<Navigate to="/dashboard" />} />
