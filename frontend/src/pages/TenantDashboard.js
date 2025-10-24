@@ -26,6 +26,7 @@ const TenantDashboard = () => {
     if (selectedProperty) {
       loadMetersAndReadings();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProperty]);
 
   const loadProperties = async () => {
