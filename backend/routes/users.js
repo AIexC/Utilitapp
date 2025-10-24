@@ -12,7 +12,7 @@ router.use(requireAdmin);
 router.get('/', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT id, username, email, role, is_active, created_at
+      SELECT id, username, email, role, is_active, is_super_admin, created_at
       FROM users
       ORDER BY created_at DESC
     `);
@@ -27,7 +27,7 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   const client = await pool.connect();
   try {
-    const { username, email, password, role } = req.body;
+    const { username, email, password, role, is_super_admin } = req.body;
 
     if (!username || !email || !password) {
       return res.status(400).json({ error: 'Username, email and password required' });
@@ -41,15 +41,20 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Invalid role' });
     }
 
+    // 🔒 ONLY Super Admin can create other Super Admins
+    if (is_super_admin && !req.user.is_super_admin) {
+      return res.status(403).json({ error: 'Only Super Admin can create other Super Admins' });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
     await client.query('BEGIN');
 
     const result = await client.query(
-      `INSERT INTO users (username, email, password_hash, role)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, username, email, role, is_active, created_at`,
-      [username, email, hashedPassword, role]
+      `INSERT INTO users (username, email, password_hash, role, is_super_admin)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, username, email, role, is_active, is_super_admin, created_at`,
+      [username, email, hashedPassword, role, is_super_admin || false]
     );
 
     await client.query('COMMIT');
@@ -73,6 +78,32 @@ router.put('/:id', async (req, res) => {
     const { id } = req.params;
     const { email, role, is_active } = req.body;
 
+    // 🔒 SECURITY: Check if target user is Super Admin
+    const targetUser = await pool.query(
+      'SELECT is_super_admin, username FROM users WHERE id = $1',
+      [id]
+    );
+
+    if (targetUser.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const isTargetSuperAdmin = targetUser.rows[0].is_super_admin;
+
+    // 🔒 PROTECTION: Only Super Admin can modify other Super Admins
+    if (isTargetSuperAdmin && !req.user.is_super_admin) {
+      return res.status(403).json({ 
+        error: 'Only Super Admin can modify other Super Admins' 
+      });
+    }
+
+    // 🔒 PROTECTION: Cannot deactivate Super Admin
+    if (isTargetSuperAdmin && is_active === false) {
+      return res.status(403).json({ 
+        error: 'Cannot deactivate Super Admin account' 
+      });
+    }
+
     const result = await pool.query(
       `UPDATE users 
        SET email = COALESCE($1, email),
@@ -80,13 +111,9 @@ router.put('/:id', async (req, res) => {
            is_active = COALESCE($3, is_active),
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $4
-       RETURNING id, username, email, role, is_active`,
+       RETURNING id, username, email, role, is_active, is_super_admin`,
       [email, role, is_active, id]
     );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
 
     res.json(result.rows[0]);
   } catch (error) {
@@ -105,6 +132,23 @@ router.post('/:id/reset-password', async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
 
+    // 🔒 SECURITY: Check if target user is Super Admin
+    const targetUser = await pool.query(
+      'SELECT is_super_admin FROM users WHERE id = $1',
+      [id]
+    );
+
+    if (targetUser.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // 🔒 PROTECTION: Only Super Admin can reset Super Admin password
+    if (targetUser.rows[0].is_super_admin && !req.user.is_super_admin) {
+      return res.status(403).json({ 
+        error: 'Only Super Admin can reset Super Admin password' 
+      });
+    }
+
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     const result = await pool.query(
@@ -114,10 +158,6 @@ router.post('/:id/reset-password', async (req, res) => {
        RETURNING id, username`,
       [hashedPassword, id]
     );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
 
     res.json({ message: 'Password reset successfully' });
   } catch (error) {
@@ -136,11 +176,24 @@ router.delete('/:id', async (req, res) => {
       return res.status(400).json({ error: 'Cannot delete your own account' });
     }
 
-    const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id', [id]);
+    // 🔒 SECURITY: Check if target user is Super Admin
+    const targetUser = await pool.query(
+      'SELECT is_super_admin, username FROM users WHERE id = $1',
+      [id]
+    );
 
-    if (result.rows.length === 0) {
+    if (targetUser.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
+
+    // 🔒 PROTECTION: Cannot delete Super Admin
+    if (targetUser.rows[0].is_super_admin) {
+      return res.status(403).json({ 
+        error: 'Cannot delete Super Admin account' 
+      });
+    }
+
+    const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id', [id]);
 
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
