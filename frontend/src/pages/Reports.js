@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { dashboardAPI, propertiesAPI } from '../api/api';
+import axios from 'axios';
+import API_URL from '../config';
 
 const Reports = () => {
   const [month, setMonth] = useState(new Date().getMonth() + 1);
@@ -8,6 +10,7 @@ const Reports = () => {
   const [properties, setProperties] = useState([]);
   const [summary, setSummary] = useState(null);
   const [monthlyData, setMonthlyData] = useState([]);
+  const [roomCosts, setRoomCosts] = useState([]); // NEW: Room-level costs
   const [recentActivity, setRecentActivity] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -29,6 +32,18 @@ const Reports = () => {
         setSummary(summaryRes.data);
         setMonthlyData(monthlyRes.data);
         setRecentActivity(activityRes.data);
+
+        // NEW: Load room-level costs if property selected
+        if (selectedProperty) {
+          const token = localStorage.getItem('token');
+          const roomCostsRes = await axios.get(
+            `${API_URL}/api/dashboard/room-costs/${selectedProperty}?month=${month}&year=${year}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          setRoomCosts(roomCostsRes.data);
+        } else {
+          setRoomCosts([]);
+        }
       } catch (error) {
         console.error('Error loading reports:', error);
       } finally {
@@ -114,6 +129,61 @@ const Reports = () => {
           <p style={styles.statValue}>{summary?.unverified_bills_count || 0}</p>
         </div>
       </div>
+
+      {/* NEW: Room-Level Cost Breakdown */}
+      {selectedProperty && roomCosts.length > 0 && (
+        <div style={styles.section}>
+          <h2 style={styles.sectionTitle}>🚪 Room-Level Cost Breakdown</h2>
+          <div style={styles.roomCostsGrid}>
+            {roomCosts.map((room) => (
+              <div key={room.room_id} style={styles.roomCard}>
+                <h3 style={styles.roomCardTitle}>
+                  🚪 {room.room_name}
+                  <span style={styles.roomSize}>{room.square_meters}m²</span>
+                </h3>
+                
+                <div style={styles.utilitiesBreakdown}>
+                  {Object.entries(room.utilities).map(([utility, data]) => (
+                    <div key={utility} style={styles.utilityRow}>
+                      <span style={styles.utilityIcon}>
+                        {utility === 'electricity' && '⚡'}
+                        {utility === 'gas' && '🔥'}
+                        {utility === 'water' && '💧'}
+                        {utility === 'heating' && '🌡️'}
+                      </span>
+                      <span style={styles.utilityName}>
+                        {utility.charAt(0).toUpperCase() + utility.slice(1)}
+                      </span>
+                      <div style={styles.utilityData}>
+                        <span style={styles.consumption}>{data.consumption} units</span>
+                        <span style={styles.cost}>{parseFloat(data.cost).toFixed(2)} RON</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                <div style={styles.roomTotal}>
+                  <strong>Total:</strong>
+                  <span style={styles.totalAmount}>
+                    {room.total_cost.toFixed(2)} RON
+                  </span>
+                </div>
+                
+                <div style={styles.perSquareMeter}>
+                  {(room.total_cost / parseFloat(room.square_meters)).toFixed(2)} RON/m²
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <div style={styles.propertyTotal}>
+            <h3 style={styles.propertyTotalLabel}>Total Property Cost:</h3>
+            <p style={styles.propertyTotalValue}>
+              {roomCosts.reduce((sum, room) => sum + room.total_cost, 0).toFixed(2)} RON
+            </p>
+          </div>
+        </div>
+      )}
 
       <div style={styles.section}>
         <h2 style={styles.sectionTitle}>💰 Monthly Costs by Landlord</h2>
@@ -225,6 +295,8 @@ const Reports = () => {
           <li>✅ Filter by month, year, and property</li>
           <li>✅ Track readings and bills activity</li>
           <li>✅ Monitor unverified bills</li>
+          <li>✅ <strong>NEW: Room-level cost breakdown with utility split</strong></li>
+          <li>✅ <strong>NEW: Cost per square meter calculation</strong></li>
           <li>📅 Historical data comparison (coming soon)</li>
           <li>📊 Charts and graphs (coming soon)</li>
           <li>📄 Export to PDF/Excel (coming soon)</li>
@@ -245,6 +317,117 @@ const styles = {
   statValue: { fontSize: '2rem', fontWeight: 'bold', color: '#4F46E5' },
   section: { marginBottom: '2rem' },
   sectionTitle: { fontSize: '1.5rem', fontWeight: 'bold', color: '#111827', marginBottom: '1rem' },
+  
+  // NEW: Room costs styles
+  roomCostsGrid: { 
+    display: 'grid', 
+    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', 
+    gap: '1.5rem',
+    marginBottom: '1.5rem'
+  },
+  roomCard: { 
+    backgroundColor: 'white', 
+    padding: '1.5rem', 
+    borderRadius: '0.5rem', 
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)', 
+    border: '1px solid #E5E7EB' 
+  },
+  roomCardTitle: { 
+    fontSize: '1.25rem', 
+    fontWeight: 'bold', 
+    color: '#111827', 
+    marginBottom: '1rem',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  roomSize: { 
+    fontSize: '0.875rem', 
+    fontWeight: 'normal', 
+    color: '#6B7280',
+    backgroundColor: '#F3F4F6',
+    padding: '0.25rem 0.75rem',
+    borderRadius: '0.25rem'
+  },
+  utilitiesBreakdown: { 
+    display: 'flex', 
+    flexDirection: 'column', 
+    gap: '0.75rem',
+    marginBottom: '1rem',
+    paddingBottom: '1rem',
+    borderBottom: '1px solid #E5E7EB'
+  },
+  utilityRow: { 
+    display: 'flex', 
+    alignItems: 'center',
+    gap: '0.75rem'
+  },
+  utilityIcon: { 
+    fontSize: '1.25rem' 
+  },
+  utilityName: { 
+    fontSize: '0.9rem', 
+    color: '#374151',
+    flex: '0 0 100px'
+  },
+  utilityData: { 
+    flex: 1,
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '0.5rem'
+  },
+  consumption: { 
+    fontSize: '0.85rem', 
+    color: '#6B7280' 
+  },
+  cost: { 
+    fontSize: '0.95rem', 
+    fontWeight: '600', 
+    color: '#4F46E5' 
+  },
+  roomTotal: { 
+    display: 'flex', 
+    justifyContent: 'space-between', 
+    alignItems: 'center',
+    fontSize: '1.1rem',
+    fontWeight: 'bold',
+    color: '#111827',
+    padding: '0.75rem',
+    backgroundColor: '#F9FAFB',
+    borderRadius: '0.375rem',
+    marginBottom: '0.5rem'
+  },
+  totalAmount: { 
+    color: '#10B981',
+    fontSize: '1.25rem'
+  },
+  perSquareMeter: { 
+    textAlign: 'center',
+    fontSize: '0.875rem',
+    color: '#6B7280',
+    fontStyle: 'italic'
+  },
+  propertyTotal: {
+    backgroundColor: '#EEF2FF',
+    padding: '1.5rem',
+    borderRadius: '0.5rem',
+    border: '2px solid #C7D2FE',
+    textAlign: 'center'
+  },
+  propertyTotalLabel: {
+    fontSize: '1.1rem',
+    color: '#4338CA',
+    marginBottom: '0.5rem'
+  },
+  propertyTotalValue: {
+    fontSize: '2rem',
+    fontWeight: 'bold',
+    color: '#4F46E5',
+    margin: 0
+  },
+  
+  // Existing styles
   table: { backgroundColor: 'white', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)', overflow: 'auto' },
   tableElement: { width: '100%', borderCollapse: 'collapse' },
   tableHeader: { backgroundColor: '#F3F4F6', borderBottom: '2px solid #E5E7EB' },
