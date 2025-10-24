@@ -111,7 +111,8 @@ const initializeDatabase = async () => {
         value DECIMAL(10, 2) NOT NULL,
         notes TEXT,
         created_by INTEGER REFERENCES users(id),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
