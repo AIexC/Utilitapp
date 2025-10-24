@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
 const { verifyToken } = require('./auth');
+const { canAccessMeter } = require('../middleware/permissions');
+const { auditLog } = require('../middleware/auditLog');
 
 router.use(verifyToken);
 
@@ -62,7 +64,7 @@ router.get('/', async (req, res) => {
 });
 
 // Create reading
-router.post('/', async (req, res) => {
+router.post('/', canAccessMeter, auditLog('CREATE', 'reading'), async (req, res) => {
   try {
     const { meter_id, reading_date, value, notes } = req.body;
     
@@ -85,7 +87,7 @@ router.post('/', async (req, res) => {
 });
 
 // Update reading
-router.put('/:id', async (req, res) => {
+router.put('/:id', auditLog('UPDATE', 'reading'), async (req, res) => {
   try {
     const { reading_date, value, notes } = req.body;
     
@@ -140,7 +142,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Delete reading
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', auditLog('DELETE', 'reading'), async (req, res) => {
   try {
     const result = await pool.query('DELETE FROM readings WHERE id = $1 RETURNING id', [req.params.id]);
     if (result.rows.length === 0) {

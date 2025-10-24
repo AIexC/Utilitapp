@@ -32,6 +32,7 @@ const initializeDatabase = async () => {
         password_hash VARCHAR(255) NOT NULL,
         role VARCHAR(20) NOT NULL DEFAULT 'user',
         is_active BOOLEAN DEFAULT true,
+        is_super_admin BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -156,6 +157,22 @@ const initializeDatabase = async () => {
       )
     `);
 
+    // Audit logs table (for tracking all changes)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        username VARCHAR(50),
+        action VARCHAR(50) NOT NULL,
+        entity_type VARCHAR(50) NOT NULL,
+        entity_id INTEGER,
+        entity_name VARCHAR(255),
+        changes JSONB,
+        ip_address VARCHAR(45),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Insert default utility prices
     await client.query(`
       INSERT INTO utility_prices (utility_type, price)
@@ -186,6 +203,9 @@ const initializeDatabase = async () => {
       CREATE INDEX IF NOT EXISTS idx_bills_meter ON bills(meter_id);
       CREATE INDEX IF NOT EXISTS idx_bills_date ON bills(date);
       CREATE INDEX IF NOT EXISTS idx_user_access ON user_property_access(user_id, property_id);
+      CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_id);
+      CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs(entity_type, entity_id);
+      CREATE INDEX IF NOT EXISTS idx_audit_logs_date ON audit_logs(created_at);
     `);
 
     await client.query('COMMIT');

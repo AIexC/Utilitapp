@@ -31,6 +31,7 @@ const billRoutes = require('./routes/bills');
 const utilityPriceRoutes = require('./routes/utilityPrices');
 const userRoutes = require('./routes/users');
 const dashboardRoutes = require('./routes/dashboard');
+const auditLogRoutes = require('./routes/auditLogs');
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -48,6 +49,7 @@ app.use('/api/bills', billRoutes);
 app.use('/api/utility-prices', utilityPriceRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/audit-logs', auditLogRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

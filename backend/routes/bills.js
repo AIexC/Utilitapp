@@ -4,6 +4,8 @@ const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { pool } = require('../database');
 const { verifyToken } = require('./auth');
+const { canUploadBills, canAccessMeter } = require('../middleware/permissions');
+const { auditLog } = require('../middleware/auditLog');
 
 // Configure Cloudinary (optional - only if you want image uploads)
 if (process.env.CLOUDINARY_CLOUD_NAME) {
@@ -82,7 +84,7 @@ router.get('/', async (req, res) => {
 });
 
 // Create bill with image upload
-router.post('/', upload.single('image'), async (req, res) => {
+router.post('/', canUploadBills, canAccessMeter, upload.single('image'), auditLog('CREATE', 'bill'), async (req, res) => {
   const client = await pool.connect();
   
   try {
