@@ -17,6 +17,7 @@ router.get('/', async (req, res) => {
         m.meter_number,
         m.unit_price,
         p.name as property_name,
+        p.id as property_id,
         LAG(r.value) OVER (PARTITION BY r.meter_id ORDER BY r.date) as previous_value
       FROM readings r
       JOIN meters m ON r.meter_id = m.id
@@ -65,7 +66,7 @@ router.post('/', async (req, res) => {
   try {
     const { meter_id, reading_date, value, notes } = req.body;
     
-    if (!meter_id || !reading_date || !value) {
+    if (!meter_id || !reading_date || value === undefined || value === null) {
       return res.status(400).json({ error: 'meter_id, reading_date and value required' });
     }
 
@@ -73,13 +74,13 @@ router.post('/', async (req, res) => {
       `INSERT INTO readings (meter_id, date, value, notes, created_by)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [meter_id, reading_date, value, notes, req.user.id]
+      [meter_id, reading_date, value, notes || null, req.user.id]
     );
     
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Create reading error:', error);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: 'Server error: ' + error.message });
   }
 });
 
@@ -88,17 +89,47 @@ router.put('/:id', async (req, res) => {
   try {
     const { reading_date, value, notes } = req.body;
     
-    if (!reading_date || !value) {
-      return res.status(400).json({ error: 'reading_date and value required' });
+    if (!reading_date && value === undefined && notes === undefined) {
+      return res.status(400).json({ error: 'At least one field required for update' });
     }
 
-    const result = await pool.query(
-      `UPDATE readings 
-       SET date = $1, value = $2, notes = $3, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $4
-       RETURNING *`,
-      [reading_date, value, notes, req.params.id]
-    );
+    // Build dynamic update query
+    const updates = [];
+    const params = [];
+    let paramCount = 1;
+
+    if (reading_date) {
+      updates.push(`date = $${paramCount}`);
+      params.push(reading_date);
+      paramCount++;
+    }
+
+    if (value !== undefined && value !== null) {
+      updates.push(`value = $${paramCount}`);
+      params.push(value);
+      paramCount++;
+    }
+
+    if (notes !== undefined) {
+      updates.push(`notes = $${paramCount}`);
+      params.push(notes);
+      paramCount++;
+    }
+
+    // Add updated_at timestamp
+    updates.push('updated_at = CURRENT_TIMESTAMP');
+
+    // Add ID parameter
+    params.push(req.params.id);
+
+    const query = `
+      UPDATE readings 
+      SET ${updates.join(', ')}
+      WHERE id = $${paramCount}
+      RETURNING *
+    `;
+
+    const result = await pool.query(query, params);
     
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Reading not found' });
@@ -107,7 +138,7 @@ router.put('/:id', async (req, res) => {
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Update reading error:', error);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: 'Server error: ' + error.message });
   }
 });
 
