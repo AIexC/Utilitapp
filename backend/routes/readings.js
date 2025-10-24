@@ -116,9 +116,6 @@ router.put('/:id', async (req, res) => {
       paramCount++;
     }
 
-    // Add updated_at timestamp
-    updates.push('updated_at = CURRENT_TIMESTAMP');
-
     // Add ID parameter
     params.push(req.params.id);
 
