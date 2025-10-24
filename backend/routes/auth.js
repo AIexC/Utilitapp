@@ -79,7 +79,8 @@ router.post('/login', async (req, res) => {
         id: user.id,
         username: user.username,
         email: user.email,
-        role: user.role
+        role: user.role,
+        is_super_admin: user.is_super_admin || false  // ← ADDED THIS LINE!
       }
     });
   } catch (error) {
