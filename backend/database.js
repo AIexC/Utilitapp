@@ -38,6 +38,20 @@ const initializeDatabase = async () => {
       )
     `);
 
+    // Add is_super_admin column if it doesn't exist (migration for existing databases)
+    await client.query(`
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'users' AND column_name = 'is_super_admin'
+        ) THEN
+          ALTER TABLE users ADD COLUMN is_super_admin BOOLEAN DEFAULT false;
+          RAISE NOTICE 'Added is_super_admin column to users table';
+        END IF;
+      END $$;
+    `);
+
     // Landlords table
     await client.query(`
       CREATE TABLE IF NOT EXISTS landlords (
